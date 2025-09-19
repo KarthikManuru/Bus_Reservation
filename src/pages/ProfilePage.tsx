@@ -56,13 +56,44 @@ export function ProfilePage() {
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Basic validation
+    if (!profileData.full_name.trim()) {
+      toast.error('Full name is required');
+      return;
+    }
+    
+    if (!profileData.email.trim()) {
+      toast.error('Email is required');
+      return;
+    }
+    
     try {
-      await updateProfile(profileData);
+      // Prepare data for update - only send non-empty values
+      const updateData: any = {
+        full_name: profileData.full_name.trim(),
+        email: profileData.email.trim(),
+      };
+      
+      if (profileData.phone?.trim()) {
+        updateData.phone = profileData.phone.trim();
+      }
+      
+      if (profileData.date_of_birth) {
+        updateData.date_of_birth = profileData.date_of_birth;
+      }
+      
+      if (profileData.gender) {
+        updateData.gender = profileData.gender;
+      }
+      
+      await updateProfile(updateData);
       setIsEditing(false);
-      toast.success('Profile updated');
-    } catch (error) {
+      toast.success('Profile updated successfully');
+    } catch (error: any) {
       console.error('Failed to update profile:', error);
-      toast.error('Failed to update profile');
+      const errorMessage = error?.message || 'Failed to update profile';
+      toast.error(`Error: ${errorMessage}`);
     }
   };
 
