@@ -4,6 +4,8 @@ import type { User, Session } from '@supabase/supabase-js';
 import type { Database } from '../types/database';
 
 type UserProfile = Database['public']['Tables']['users']['Row'];
+type UsersInsert = Database['public']['Tables']['users']['Insert'];
+type UsersUpdate = Database['public']['Tables']['users']['Update'];
 
 interface AuthContextType {
   user: User | null;
@@ -29,7 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id);
+        ensureProfileExists(session.user).finally(() => fetchProfile(session.user!.id));
       } else {
         setLoading(false);
       }
@@ -42,6 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
 
       if (session?.user) {
+        await ensureProfileExists(session.user);
         await fetchProfile(session.user.id);
       } else {
         setProfile(null);
@@ -69,6 +72,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const ensureProfileExists = async (authedUser: User) => {
+    try {
+      const { data: rows, error } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', authedUser.id)
+        .limit(1);
+
+      if (error) return;
+      if (rows && rows.length > 0) return;
+
+      const metadata = authedUser.user_metadata || {};
+      const payload: UsersInsert = {
+        id: authedUser.id,
+        email: authedUser.email || '',
+        full_name: String(metadata.full_name || ''),
+        phone: metadata.phone ? String(metadata.phone) : null,
+        gender: (metadata.gender as any) || 'other',
+        date_of_birth: metadata.date_of_birth ? String(metadata.date_of_birth) : null,
+        role: (metadata.role as any) || 'passenger',
+      };
+
+      await (supabase as any).from('users').insert(payload);
+    } catch (_e) {
+      // best-effort; ignore to avoid blocking auth flow
+    }
+  };
+
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -78,44 +109,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, userData: any) => {
-  const { data, error } = await supabase.auth.signUp({
-    email: String(email || "").trim(),
-    password: String(password || "").trim(),
-    options: {
-      data: {
-        full_name: String(userData.full_name || ""),
-        phone: String(userData.phone || ""),
-        gender: String(userData.gender || ""),
-        date_of_birth: String(userData.date_of_birth || ""),
-        role: String(userData.role || "passenger"),
+    const { data, error } = await supabase.auth.signUp({
+      email: String(email || '').trim(),
+      password: String(password || '').trim(),
+      options: {
+        emailRedirectTo: `${window.location.origin}/login`,
+        data: {
+          full_name: String(userData.full_name || ''),
+          phone: String(userData.phone || ''),
+          gender: String(userData.gender || ''),
+          date_of_birth: String(userData.date_of_birth || ''),
+          role: String(userData.role || 'passenger'),
+        },
       },
-    },
-  });
+    });
 
-  if (error) throw error;
+    if (error) throw error;
 
-  if (data.user) {
-    const { error: profileError } = await supabase.from("users").insert([
-      {
+    // Only insert profile if a session exists (avoids RLS failure when email confirmation is required)
+    if (data.user && data.session) {
+      const insertPayload: UsersInsert = {
         id: data.user.id,
-        email: String(email || ""),
-        ...userData,
-      },
-    ]);
+        email: String(email || ''),
+        full_name: String(userData.full_name || ''),
+        phone: userData.phone ? String(userData.phone) : null,
+        gender: (userData.gender as any) || 'other',
+        date_of_birth: userData.date_of_birth ? String(userData.date_of_birth) : null,
+        role: (userData.role as any) || 'passenger',
+      };
+      const { error: profileError } = await (supabase as any).from('users').insert(insertPayload);
 
-    if (profileError) throw profileError;
-  }
-};
+      if (profileError) throw profileError;
+    }
+  };
 
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    // Ensure local state is cleared immediately
+    setUser(null);
+    setSession(null);
+    setProfile(null);
   };
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
     if (!user) throw new Error('No user logged in');
 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('users')
       .update(updates)
       .eq('id', user.id);

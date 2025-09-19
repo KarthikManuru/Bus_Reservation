@@ -1,16 +1,25 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Bus, User, LogOut, Settings, Bell } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBooking } from '../../contexts/BookingContext';
 import { Button } from '../ui/Button';
 
 export function Header() {
   const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
+  const { resetBooking } = useBooking();
 
   const handleSignOut = async () => {
-    await signOut();
-    navigate('/');
+    try {
+      await signOut();
+      resetBooking();
+      toast.success('Signed out');
+      navigate('/login');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to sign out');
+    }
   };
 
   const getRoleBasedPath = () => {
@@ -56,7 +65,7 @@ export function Header() {
                     <Settings className="h-4 w-4 mr-2" />
                     Dashboard
                   </Link>
-                  <Link to="/bookings" className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                  <Link to="/profile?tab=bookings" className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                     <Bell className="h-4 w-4 mr-2" />
                     My Bookings
                   </Link>

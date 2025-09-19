@@ -37,11 +37,37 @@ export function PaymentPage() {
     // In a real app, you would save the booking to your database
     console.log('Payment successful:', paymentIntent);
     
-    // Simulate booking confirmation
+    // Simulate booking confirmation and persist locally for demo
+    const newBooking = {
+      id: crypto.randomUUID(),
+      bookingReference: `BT-${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+      operator: selectedBus.operator,
+      route: `${searchParams.from} → ${searchParams.to}`,
+      date: searchParams.date,
+      time: `${selectedBus.departureTime} - ${selectedBus.arrivalTime}`,
+      seats: selectedSeats,
+      status: 'confirmed',
+      amount: finalAmount,
+      passengers: passengerDetails.map((p: any) => ({ name: p.name, seat: p.seatNumber })),
+      pickupPoint,
+      dropPoint,
+      createdAt: new Date().toISOString(),
+    } as any;
+
+    try {
+      const stored = localStorage.getItem('myBookings');
+      const list = stored ? JSON.parse(stored) : [];
+      list.unshift(newBooking);
+      localStorage.setItem('myBookings', JSON.stringify(list));
+    } catch (_) {
+      // ignore localStorage errors
+    }
+
+    // Simulate delay
     setTimeout(() => {
       setIsProcessing(false);
       resetBooking();
-      navigate('/profile'); // Redirect to bookings page
+      navigate('/profile?tab=bookings');
     }, 2000);
   };
 

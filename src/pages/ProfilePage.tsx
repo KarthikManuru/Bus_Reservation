@@ -1,47 +1,28 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { User, MapPin, Clock, CreditCard, Edit, Calendar, Phone, Mail } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import toast from 'react-hot-toast';
 
-// Mock booking data
-const mockBookings = [
-  {
-    id: '1',
-    bookingReference: 'BT123456789',
-    operator: 'Premium Express',
-    route: 'New York → Washington DC',
-    date: '2024-02-15',
-    time: '22:30 - 06:30',
-    seats: ['A1', 'A2'],
-    status: 'confirmed',
-    amount: 90,
-    passengers: [
-      { name: 'John Doe', seat: 'A1' },
-      { name: 'Jane Doe', seat: 'A2' }
-    ]
-  },
-  {
-    id: '2',
-    bookingReference: 'BT987654321',
-    operator: 'Comfort Travel',
-    route: 'Los Angeles → San Francisco',
-    date: '2024-01-28',
-    time: '23:45 - 07:15',
-    seats: ['C3'],
-    status: 'completed',
-    amount: 65,
-    passengers: [
-      { name: 'John Doe', seat: 'C3' }
-    ]
+function readLocalBookings() {
+  try {
+    const raw = localStorage.getItem('myBookings');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
   }
-];
+}
 
 export function ProfilePage() {
   const { profile, updateProfile } = useAuth();
-  const [activeTab, setActiveTab] = useState('profile');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const initialTab = searchParams.get('tab') || 'profile';
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [isEditing, setIsEditing] = useState(false);
-  const [bookings] = useState(mockBookings);
+  const [bookings, setBookings] = useState(readLocalBookings());
   const [profileData, setProfileData] = useState({
     full_name: '',
     email: '',
@@ -62,14 +43,36 @@ export function ProfilePage() {
     }
   }, [profile]);
 
+  useEffect(() => {
+    setBookings(readLocalBookings());
+  }, [activeTab]);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && tab !== activeTab) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await updateProfile(profileData);
       setIsEditing(false);
+      toast.success('Profile updated');
     } catch (error) {
       console.error('Failed to update profile:', error);
+      toast.error('Failed to update profile');
     }
+  };
+
+  const switchTab = (tab: string) => {
+    setActiveTab(tab);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', tab);
+      return next as any;
+    });
   };
 
   const getStatusColor = (status: string) => {
@@ -109,7 +112,7 @@ export function ProfilePage() {
                 ? 'text-blue-600 border-b-2 border-blue-600'
                 : 'text-gray-600 hover:text-gray-900'
             }`}
-            onClick={() => setActiveTab('profile')}
+            onClick={() => switchTab('profile')}
           >
             Profile Information
           </button>
@@ -119,7 +122,7 @@ export function ProfilePage() {
                 ? 'text-blue-600 border-b-2 border-blue-600'
                 : 'text-gray-600 hover:text-gray-900'
             }`}
-            onClick={() => setActiveTab('bookings')}
+            onClick={() => switchTab('bookings')}
           >
             My Bookings
           </button>
